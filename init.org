@@ -1,0 +1,1548 @@
+#+TITLE: emacs config
+#+AUTHOR: Paul Davis
+#+BABEL: :cache yes
+#+PROPERTY: header-args :tangle yes
+
+* Setup
+
+  First, make sure this file will compile itself into a ~.el~ file
+  that emacs can load. The repo's existing ~init.el~ will bootstrap
+  this and replace itself in the process
+
+  #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun ds/tangle-init ()
+      "If the current buffer is 'init.org' the code-blocks are
+    tangled, and the tangled file is compiled."
+      (when (equal (buffer-file-name)
+                   (expand-file-name (concat user-emacs-directory "init.org")))
+        ;; Avoid running hooks when tangling.
+        (let ((prog-mode-hook nil))
+          (org-babel-tangle)
+          (byte-compile-file (concat user-emacs-directory "init.el")))))
+    (add-hook 'after-save-hook 'ds/tangle-init)
+  #+END_SRC
+
+
+* Configuration
+** Package Setup
+
+   Set up package repos and ~use-package~
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+          (require 'package)
+          (setq package-enable-at-startup nil)
+          (setq package-archives
+                '(("melpa"        . "https://melpa.org/packages/")
+                  ("melpa-stable" . "https://stable.melpa.org/packages/")
+                  ("gnu"          . "https://elpa.gnu.org/packages/")
+                  ("org"          . "https://orgmode.org/elpa/"))
+                package-archive-priorities
+                '(("org"          . 20)
+                  ("melpa-stable" . 15)
+                  ("gnu"          . 10)
+                  ("melpa"        . 0))
+                package-pinned-packages
+                '((use-package       . "melpa")
+                  (projectile        . "melpa")
+                  (org-plus-contrib  . "org")
+                  (pdf-tools         . "melpa")
+                  (flycheck          . "melpa")))
+
+          (package-initialize)
+
+          (unless (package-installed-p 'use-package)
+            (package-refresh-contents)
+            (package-install 'use-package))
+
+          (unless (package-installed-p 'diminish)
+            (package-refresh-contents)
+            (package-install 'diminish))
+
+          (unless (package-installed-p 'bind-key)
+            (package-refresh-contents)
+            (package-install 'use-package))
+
+          (eval-when-compile
+            (require 'use-package))
+          ;; use-package should have these loaded
+          (require 'diminish)
+          (require 'bind-key)
+   #+END_SRC
+
+** Init
+
+
+   Inhibit the startup message
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq inhibit-startup-message t)
+   #+END_SRC
+
+   Disable lock files
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq-default create-lockfiles nil)
+   #+END_SRC
+
+   Adjust backup file settings to be in a separate directory
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (defvar ds/backup-directory
+       (expand-file-name "tmp/backups" user-emacs-directory)
+       "Where backups go.")
+     (defvar ds/autosave-directory
+       (expand-file-name "tmp/autosave" user-emacs-directory)
+       "Where autosaves go.")
+     (make-directory ds/backup-directory t)
+     (make-directory ds/autosave-directory  t)
+     (setq backup-by-copying t
+           backup-directory-alist `((".*" .  ,ds/backup-directory))
+           auto-save-file-name-transforms `((".*"  ,ds/autosave-directory t))
+           auto-save-list-file-prefix  ds/autosave-directory
+           delete-old-versions t
+           kept-new-versions 6
+           kept-old-versions 2
+           version-control t)
+   #+END_SRC
+
+   Remove menu bars and scroll bars
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (menu-bar-mode -1)
+     (tool-bar-mode -1)
+     (if (boundp 'scroll-bar-mode)
+         (scroll-bar-mode -1))
+   #+END_SRC
+
+   Set the font
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (add-to-list 'default-frame-alist '(font . "Monospace-12"))
+   #+END_SRC
+
+   Setup custom file
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (defvar custom-file-location
+       (expand-file-name "custom.el" user-emacs-directory)
+       "File for customizations via \\[customize].")
+
+     (setq custom-file custom-file-location)
+     (if (file-readable-p custom-file-location)
+         (progn
+           (load custom-file)))
+   #+END_SRC
+
+** Utility Functions
+*** Recursive files
+
+    A function to get files in a directory recursively, this is used in
+    the ~org-agenda~ config to add all the files in ~$HOME/org/agenda~
+    and it's subfolders
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+     (defun ds/directory-files-recursive(directory &optional match)
+       "Get all files in DIRECTORY recursivley.
+     There are three optional arguments:
+     If FULL is non-nil, return absolute file names.  Otherwise return names
+      that are relative to the specified directory.
+     If MATCH is non-nil, mention only file names that match the regexp MATCH.
+     If NOSORT is non-nil, the list is not sorted--its order is unpredictable.
+      Otherwise, the list returned is sorted with `string-lessp'.
+      NOSORT is useful if you plan to sort the result yourself."
+       (interactive)
+       (let (file-list
+             (current-dir-list (directory-files-and-attributes directory t))
+             (match (if match match "^[^.].*"))) ; ignore hidden files by default
+         (while current-dir-list
+           (let ((file-name (car (car current-dir-list)))
+                 (is-dir (equal t (car (cdr (car current-dir-list))))))
+             (cond
+              ;; if the filename matches the match string
+              (is-dir
+               ;; make sure it is not a hidden dir
+               (if (or
+                    (equal "." (substring file-name -1))
+                    (equal "." (substring (file-name-nondirectory file-name) 0 1)))
+                   ()
+                 ;; recurse it adding the result to the list
+                 (setq file-list
+                       (append
+                        (ds/directory-files-recursive file-name match)
+                        file-list))))
+              ((string-match match (file-name-nondirectory file-name))
+               (setq file-list (cons file-name file-list)))))
+           (setq current-dir-list (cdr current-dir-list)))
+         file-list))
+    #+END_SRC
+
+*** Full Buffer Indent
+
+    A function to indent the entire buffer, bound to ~C-\~
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/indent-buffer ()
+	"Indent entire buffer using `indent-according-to-mode'."
+	(interactive)
+	(save-excursion
+	  (push-mark (point))
+	  (push-mark (point-max) nil t)
+	  (goto-char (point-min))
+	  (indent-region (region-beginning) (region-end))))
+      (global-set-key (kbd "C-c \\") 'ds/indent-buffer)
+    #+END_SRC
+
+*** Local Variables
+
+    A function that makes a variable local to the buffer and sets it's
+    value in one step
+
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+     (defun ds/set-local-variable (varname value)
+       "Make a variable VARNAME local to the buffer if needed, then set to VALUE."
+       (interactive "vVariable Name: \nsNew Value: ")
+       (let  ((number (string-to-number value)))
+         (make-variable-buffer-local varname)
+         (if (and (= 0 number) (not (string-equal "0" value)))
+             (set-variable varname value)
+           (set-variable varname number))))
+    #+END_SRC
+
+*** Set Window Size
+
+    Set a window's width in pixels
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/set-window-pixel-width (pixel-width &optional window)
+        "Set the WINDOW to PIXEL-WIDTH pixels wide"
+        (interactive "nNew Pixel Width: ")
+        (let* ((win (or window (selected-window)))
+               (current-width (window-pixel-width win))
+               (wanted-delta (- pixel-width current-width))
+               (delta (window-resizable win wanted-delta t nil t)))
+          (window-resize win delta t nil t)))
+    #+END_SRC
+
+    Set window width in columns
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/set-window-column-width (column-width &optional window)
+        "Set the WINDOW to COLUMN-WIDTH columns wide"
+        (interactive "nNew Column Width: ")
+        (let* ((win (or window (selected-window)))
+               (current-width (window-width win))
+               (wanted-delta (- column-width current-width))
+               (delta (window-resizable win wanted-delta t)))
+          (message "%s %d -> %d (%d)" win current-width column-width delta)
+          (window-resize win delta t)))
+    #+END_SRC
+
+    Set a window's height in pixels
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/set-window-pixel-height (pixel-height &optional window)
+        "Set the WINDOW to PIXEL-HEIGHT pixels wide"
+        (interactive "nNew Pixel Height: ")
+        (let* ((win (or window (selected-window)))
+               (current-height (window-pixel-height win))
+               (wanted-delta (- pixel-height current-height))
+               (delta (window-resizable win wanted-delta nil nil t)))
+          (window-resize win delta nil nil t)))
+    #+END_SRC
+
+    Set window height in columns
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/set-window-column-height (column-height &optional window)
+        "Set the WINDOW to COLUMN-HEIGHT columns wide"
+        (interactive "nNew Column Height: ")
+        (let* ((win (or window (selected-window)))
+               (current-height (window-height win))
+               (wanted-delta (- column-height current-height))
+               (delta (window-resizable win wanted-delta)))
+          (message "%s %d -> %d (%d)" win current-height column-height delta)
+          (window-resize win delta)))
+    #+END_SRC
+
+    Set a window's ratio
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/set-window-ratio (&optional win width height horizontal)
+        "Set WIN size ratio in pixels based on WIDTH and HEIGHT, optionally resize HORIZONTAL."
+        (interactive "i\nnWidth: \nnHeight: \nSHorizontal: ")
+        (let* ((padding 19)
+               (win (or win (selected-window)))
+               (w (float (or width 16)))
+               (h (float (or height 9)))
+               (ratio (/ w h))
+               (original-size (if horizontal
+                                  (window-width win t)
+                                (- (window-pixel-height win) padding)))
+               (reference-size (if horizontal
+                                   (- (window-pixel-height win) padding)
+                                 (window-width win t)))
+               (new-size (if horizontal
+                             (truncate (* reference-size ratio))
+                           (truncate (* reference-size (/ 1 ratio)))))
+               (delta (- new-size original-size)))
+          (message "%s %f reference: %d current: %d -> new: %d (delta: %d)" horizontal ratio reference-size original-size new-size delta)
+          (if horizontal
+              (ds/set-window-pixel-width new-size win)
+            (ds/set-window-pixel-height (+ new-size padding) win))))
+    #+END_SRC
+
+*** Clear the minibuffer
+
+    "Clear" the minibuffer
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+     (defun ds/clear-minibuffer (&rest _)
+       (message nil))
+    #+END_SRC
+
+*** Alignment
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/align-repeat (start end regexp)
+          "Repeat alignment with respect to 
+           the given regular expression."
+          (interactive "r\nsAlign regexp: ")
+          (align-regexp start end 
+              (concat "\\(\\s-*\\)" regexp) 1 1 t))
+    #+END_SRC
+
+*** Case Toggle
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/toggle-camelcase-underscores ()
+        "Toggle between camelcase and underscore notation for the symbol at point."
+        (interactive)
+        (save-excursion
+          (let* ((bounds (bounds-of-thing-at-point 'symbol))
+                 (start (car bounds))
+                 (end (cdr bounds))
+                 (currently-using-underscores-p (progn (goto-char start)
+                                                       (re-search-forward "_" end t))))
+            (if currently-using-underscores-p
+                (progn
+                  (upcase-initials-region start end)
+                  (while (search-forward "_" end t)
+                    (replace-match ""))
+                  (downcase-region start (1+ start)))
+              (goto-char (1+ start))
+              (while (re-search-forward "\\([A-Z]\\)" end t)
+                (replace-match "_\\1"))
+              (downcase-region start (cdr (bounds-of-thing-at-point 'symbol)))))))
+
+      (global-set-key (kbd "C-c _") 'ds/toggle-camelcase-underscores)
+    #+END_SRC
+
+*** Project Eslint Finder
+
+    A function to get an eslint executable for linting javascript. This
+    should use the local instance installed in ~node_modules~ over any
+    globally installed eslint package
+
+    #+BEGIN_SRC emacs-lisp
+      (defun ds/find-eslint-executable ()
+        (let* ((root (locate-dominating-file
+                      (or (buffer-file-name) default-directory)
+                      "node_modules"))
+               (eslint-local (and root
+                                  (expand-file-name "node_modules/eslint/bin/eslint.js"
+                                                    root)))
+               (eslint-system (executable-find "eslint")))
+          (if (and (stringp eslint-local)
+                   (file-executable-p eslint-local))
+              eslint-local
+            eslint-system)))
+    #+END_SRC
+
+** Macros
+*** Popup Window Width Setter
+
+    Use this for setting a width of a popup window in the
+    ~display-buffer-alist~ when using a side window.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defmacro ds/popup-thing-display-settings (BUFFER-NAME SIDE &optional SLOT SIZE)
+        `(add-to-list 'display-buffer-alist
+                      '(,(concat "\\`" (regexp-quote BUFFER-NAME) "\\'")
+                        (display-buffer-reuse-window
+                         display-buffer-in-side-window)
+                        (side            . ,SIDE)
+                        ,(if SLOT `(slot            . ,SLOT))
+                        (reusable-frames)
+                        (inhibit-switch-frame . t)
+                        ,(if SIZE
+                             (if (or (equal SIDE 'top)
+                                     (equal SIDE 'bottom))
+                                 `(window-height . ,SIZE)
+                               `(window-width   . ,(if (< SIZE 1) SIZE
+                                                     `(lambda (win)
+                                                        (if (or (< (window-width win) ,SIZE)
+                                                                (not (or (window-in-direction 'above win t)
+                                                                         (window-in-direction 'below win t))))
+                                                            (ds/set-window-column-width ,SIZE win))))))))))
+    #+END_SRC
+** Basic Customizations
+*** Indentation
+
+    Fuck tabs
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq-default indent-tabs-mode nil)
+      (setq-default tab-width 4)
+      (setq-default tab-stop-list (number-sequence 4 120 4))
+    #+END_SRC
+
+*** Line opening
+
+    Set up line opening shorcuts, one for opening above, another for
+    below
+
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun open-next-line (count)
+	      "Open COUNT lines after the current one."
+	      (interactive "p")
+	      (end-of-line)
+	      (open-line count)
+	      (forward-line count)
+	      (indent-according-to-mode))
+      ;; Behave like vi's O command
+      (defun open-previous-line (count)
+	      "Open COUNT new line before the current one."
+	      (interactive "p")
+	      (beginning-of-line)
+	      (open-line count)
+	      (indent-according-to-mode))
+
+      (global-set-key (kbd "C-o") 'open-next-line)
+      (global-set-key (kbd "M-o") 'open-previous-line)
+    #+END_SRC
+
+*** Show Matching Brackets
+
+    Show matching brackets (and parentheses, but these get more later
+    on)
+
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (show-paren-mode)
+    #+END_SRC
+
+*** Enable Commands
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (put 'narrow-to-region 'disabled nil)
+    #+END_SRC
+
+*** ERC
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defvar erc-hide-list '("JOIN" "PART" "QUIT"))
+    #+END_SRC
+
+*** Compiling
+
+    Special display rules for compile buffer
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (ds/popup-thing-display-settings "*compilation*" right 2 104)
+    #+END_SRC
+
+    Close compilation windows after 2 seconds if they are successful
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq compilation-finish-functions
+            '((lambda (buf str)
+                (message "compilation %s" str)
+                (if (eq 0 (string-match-p "^finished$" str))
+                    (let ((project-root (if (projectile-project-p) (projectile-project-root) nil)))
+                      (run-at-time
+                       2 nil 'delete-windows-on
+                       (get-buffer-create "*compilation*"))
+                      (if project-root
+                        (run-at-time
+                         2.01 nil 'projectile-vc project-root)))))))
+    #+END_SRC
+
+    Make compile window auto-scroll
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq compilation-scroll-output t)
+    #+END_SRC
+
+    Delete window on ~q~ in compilation window
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package compile
+        :config
+        (define-key compilation-mode-map (kbd "q") #'delete-window))
+    #+END_SRC
+
+*** Ediff
+    
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package ediff
+        :config
+        (setq ediff-window-setup-function #'ediff-setup-windows-plain))
+    #+END_SRC
+
+*** Ansi Term
+    
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun ds/ansi-term-handle-close ()
+        "Close current term buffer when `exit' from term buffer."
+        (when (ignore-errors (get-buffer-process (current-buffer)))
+          (set-process-sentinel (get-buffer-process (current-buffer))
+                                (lambda (proc change)
+                                  (when (string-match "\\(finished\\|exited\\)" change)
+                                    (kill-buffer (process-buffer proc))
+                                    (if (not (= (length (window-list)) 1))
+                                        (delete-window)))))))
+
+      (add-hook 'term-mode-hook #'ds/ansi-term-handle-close)
+    #+END_SRC
+    
+*** Shell Highlighting
+
+    Add this to highlight more stuff in ~sh-mode~
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun sh-script-extra-font-lock-match-var-in-double-quoted-string (limit)
+        "Search for variables in double-quoted strings."
+        (let (res)
+          (while
+              (and (setq res (progn (if (eq (get-byte) ?$) (backward-char))
+                                    (re-search-forward
+                                     "[^\\]\\$\\({#?\\)?\\([[:alpha:]_][[:alnum:]_]*\\|[-#?@!]\\|[[:digit:]]+\\)"
+                                     limit t)))
+                   (not (eq (nth 3 (syntax-ppss)) ?\")))) res))
+
+      (defvar sh-script-extra-font-lock-keywords
+        '((sh-script-extra-font-lock-match-var-in-double-quoted-string
+           (2 font-lock-variable-name-face prepend))))
+
+      (defun sh-script-extra-font-lock-activate ()
+        (interactive)
+        (font-lock-add-keywords nil sh-script-extra-font-lock-keywords)
+        (if (fboundp 'font-lock-flush)
+            (font-lock-flush)
+          (when font-lock-mode (with-no-warnings (font-lock-fontify-buffer)))))
+
+      (add-hook 'sh-mode-hook 'sh-script-extra-font-lock-activate)
+    #+END_SRC
+    
+    Use shell mode for various files
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (add-to-list 'auto-mode-alist '("PKGBUILD$" . sh-mode))
+      (add-to-list 'auto-mode-alist '("zshrc$" . sh-mode))
+      (add-to-list 'auto-mode-alist '("zshenv$" . sh-mode))
+      (add-to-list 'auto-mode-alist '("zprofile$" . sh-mode))
+
+    #+END_SRC
+
+*** Set mark for accidental ~M-v~ press
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (add-function :before (symbol-function 'scroll-down-command) #'push-mark)
+      (add-function :before (symbol-function 'scroll-up-command) #'push-mark)
+    #+END_SRC
+
+*** Tramp
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq tramp-ssh-controlmaster-options
+                      (concat
+                        "-o ControlPath=/tmp/ssh-ControlPath-%%r@%%h:%%p "
+                        "-o ControlMaster=auto -o ControlPersist=yes"))
+    #+END_SRC
+
+*** Electric Pairs
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (add-hook 'prog-mode-hook #'electric-pair-local-mode)
+    #+END_SRC
+
+** ChordPro Mode
+   
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (defvar chordpro-font-lock-defaults
+       '((("\\(\\[[^]]*\\]\\)" . font-lock-string-face)
+          ("^\\(#.*\\)" . font-lock-comment-face)
+          ("\\({subtitle[^}]*}\\)" . font-lock-type-face)
+          ("\\({title[^}]*}\\)" . font-lock-keyword-face)
+          ("\\({[^}]*}\\)" . font-lock-variable-name-face))))
+
+
+     (define-derived-mode chordpro-mode text-mode "Chordpro"
+       "Major mode for editing Chordpro files.
+     Special commands:
+     \\{chordpro-mode-map}"
+       (setq font-lock-defaults chordpro-font-lock-defaults)
+       (auto-fill-mode -1))
+
+     (add-to-list 'auto-mode-alist '("\\.pro$" . chordpro-mode))
+     (add-to-list 'auto-mode-alist '("\\.chopro$" . chordpro-mode))
+     (add-to-list 'auto-mode-alist '("\\.chordpro$" . chordpro-mode))
+   #+END_SRC
+
+
+
+
+
+* Basic Packages
+** Zenburn
+
+   Customized zenburn color pallette
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (defvar ds/zenburn-colors
+       '(("zenburn-fg+1"     . "#FFFFEF")
+         ("zenburn-fg"       . "#DCDCCC")
+         ("zenburn-fg-05"    . "#989888")
+         ("zenburn-fg-1"     . "#656555")
+         ("zenburn-bg-2"     . "#000000")
+         ("zenburn-bg-1"     . "#0C0C0C")
+         ("zenburn-bg-05"    . "#121212")
+         ("zenburn-bg"       . "#1C1C1C")
+         ("zenburn-bg+05"    . "#222222")
+         ("zenburn-bg+1"     . "#2C2C2C")
+         ("zenburn-bg+2"     . "#3C3C3C")
+         ("zenburn-bg+3"     . "#4C4C4C")
+         ("zenburn-red+1"    . "#DCA3A3")
+         ("zenburn-red"      . "#CC9393")
+         ("zenburn-red-1"    . "#BC8383")
+         ("zenburn-red-2"    . "#AC7373")
+         ("zenburn-red-3"    . "#9C6363")
+         ("zenburn-red-4"    . "#8C5353")
+         ("zenburn-orange"   . "#DFAF8F")
+         ("zenburn-yellow"   . "#F0DFAF")
+         ("zenburn-yellow-1" . "#E0CF9F")
+         ("zenburn-yellow-2" . "#D0BF8F")
+         ("zenburn-yellow-4" . "#B09F6F")
+         ("zenburn-green-2"  . "#4F6F4F")
+         ("zenburn-green-1"  . "#5F7F5F")
+         ("zenburn-green"    . "#7F9F7F")
+         ("zenburn-green+1"  . "#8FB28F")
+         ("zenburn-green+2"  . "#9FC59F")
+         ("zenburn-green+3"  . "#AFD8AF")
+         ("zenburn-green+4"  . "#BFEBBF")
+         ("zenburn-cyan"     . "#93E0E3")
+         ("zenburn-blue+3"   . "#3c3c45")
+         ("zenburn-blue+1"   . "#94BFF3")
+         ("zenburn-blue"     . "#8CD0D3")
+         ("zenburn-blue-1"   . "#7CB8BB")
+         ("zenburn-blue-2"   . "#6CA0A3")
+         ("zenburn-blue-3"   . "#5C888B")
+         ("zenburn-blue-4"   . "#4C7073")
+         ("zenburn-blue-5"   . "#366060")
+         ("zenburn-magenta"  . "#DC8CC3"))
+       "List of Zenburn colors.
+      Each element has the form (NAME . HEX).
+
+      `+N' suffixes indicate a color is lighter.
+      `-N' suffixes indicate a color is darker.
+
+      This overrides the colors provided by the `zenburn-theme' package.")
+
+     (defun ds/get-zenburn-color (name)
+       "Get zenburn color by NAME."
+       (let* ((key (concat "zenburn-" name))
+              (data (assoc key ds/zenburn-colors)))
+         (if data
+             (cdr data))))
+   #+END_SRC
+
+   Zenburn using customizer pallette above
+
+   #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package zenburn-theme
+       :ensure t
+       :init
+       (defvar zenburn-colors-alist ds/zenburn-colors)
+       :config
+       (load-theme 'zenburn t))
+       ;; default face customizations
+       ;; region selection
+       (set-face-attribute 'region nil 
+                           :background (ds/get-zenburn-color "blue+3")
+                           :inverse-video t)
+       ;; flat mode and header lines
+       (set-face-attribute 'header-line nil
+                           :background (ds/get-zenburn-color "bg+1")
+                           :box nil)
+       (set-face-attribute 'mode-line nil
+                           :background (ds/get-zenburn-color "bg+1")
+                           :box nil)
+       (set-face-attribute 'mode-line-inactive nil
+                           :foreground (ds/get-zenburn-color "bg+3")
+                           :background (ds/get-zenburn-color "bg+1")
+                           :box nil)
+       (set-face-attribute 'fringe nil
+                           :background (ds/get-zenburn-color "bg+1"))
+       ;; italic comments
+       (set-face-attribute 'font-lock-comment-face nil
+                           :slant 'italic)
+       ;; eldoc function face
+       (set-face-attribute 'eldoc-highlight-function-argument nil
+                           :foreground (ds/get-zenburn-color "blue-1"))
+       ;; set the verticle border color
+       (set-face-attribute 'vertical-border nil
+                           :foreground (ds/get-zenburn-color "bg-1"))
+
+       ;; auto suggest face for eshell
+       (make-face 'ds/esh-autosuggest-face)
+       (set-face-attribute 'ds/esh-autosuggest-face nil
+                           :foreground (ds/get-zenburn-color "fg-1")
+                           :background (ds/get-zenburn-color "bg"))
+   #+END_SRC
+
+** Autorevert
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package autorevert
+       :diminish auto-revert-mode
+       :hook (after-init . global-auto-revert-mode))
+   #+END_SRC
+
+** Highlight Parentheses
+
+   Enabled just for elisp right now, others if needed
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package highlight-parentheses
+       :ensure t
+       :diminish highlight-parentheses-mode
+       :hook (emacs-lisp-mode . highlight-parentheses-mode)
+       :config
+       (setq hl-paren-background-colors
+             `(,(ds/get-zenburn-color "bg-2")
+               ,(ds/get-zenburn-color "bg-1")
+               ,(ds/get-zenburn-color "bg-05")
+               ,(ds/get-zenburn-color "bg+05")
+               ,(ds/get-zenburn-color "bg+1")
+               ,(ds/get-zenburn-color "bg+2")
+               ,(ds/get-zenburn-color "bg+3")
+               ,(ds/get-zenburn-color "fg-1")))
+       (setq hl-paren-colors
+             `(,(ds/get-zenburn-color "red-2")
+               ,(ds/get-zenburn-color "green")
+               ,(ds/get-zenburn-color "orange")
+               ,(ds/get-zenburn-color "blue")
+               ,(ds/get-zenburn-color "yellow")
+               ,(ds/get-zenburn-color "cyan")
+               ,(ds/get-zenburn-color "magenta")
+               ,(ds/get-zenburn-color "fg+1"))))
+   #+END_SRC
+
+** Subword
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package subword
+       :diminish subword-mode
+       :hook (after-init . global-subword-mode))
+   #+END_SRC
+
+** Winner
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package winner
+       :diminish winner-mode
+       :hook (after-init . winner-mode))
+   #+END_SRC
+
+** Adaptive Wrap
+    
+   #+BEGIN_SRC emacs-lisp
+     (use-package adaptive-wrap
+       :ensure t
+       :functions adaptive-wrap-prefix-mode
+       :init
+       (defvar adaptive-wrap-extra-indent 6)
+       (defun ds/wrap-on-visual-line-mode ()
+         (adaptive-wrap-prefix-mode (if visual-line-mode 1 -1)))
+       :hook (visual-line-mode . ds/wrap-on-visual-line-mode))
+
+   #+END_SRC
+    
+** Dired
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package dired
+       :config
+       (setq dired-listing-switches "-lha --group-directories-first"))
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package dired-subtree
+       :ensure t
+       :commands (dired-subtree-toggle dired-subtree-cycle)
+       :bind (:map dired-mode-map
+                   ("i" . dired-subtree-toggle))
+       :config
+       (setq dired-subtree-use-backgrounds nil))
+   #+END_SRC
+
+** Uniquify
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package uniquify
+       :custom (uniquify-buffer-name-style 'forward))
+   #+END_SRC
+
+** Magit
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package magit
+       :ensure t
+       :bind (:map magit-mode-map
+                   ([remap previous-line] . magit-previous-line)
+                   ([remap next-line] . magit-next-line))
+       :hook (magit-popup-mode . fit-window-to-buffer)
+       :config
+       (setq magit-merge-arguments '("--no-ff"))
+
+       ;;(define-key magit-mode-map [remap previous-line] 'magit-previous-line)
+       ;;(define-key magit-mode-map [remap next-line] 'magit-next-line)
+
+       (setq global-magit-file-mode        t
+             magit-log-highlight-keywords  t
+             magit-diff-highlight-keywords t))
+
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package git-timemachine
+       :ensure t)
+   #+END_SRC
+** Libraries
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package dash
+       :functions -reduce-from
+       :ensure t)
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package s
+       :functions s-blank
+       :ensure t)
+   #+END_SRC
+
+** Eshell
+
+   Some settings to make eshell "nicer"
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package eshell
+       :hook ((eshell-mode . ds/eshell-setup)
+              (eshell-pre-command . ds/eshell-append-history))
+       :defines (eshell-history-ring eshell-history-file-name)
+       :functions (eshell-write-history eshell/pwd)
+       :config
+       (setenv "PAGER" "cat")
+
+       ;; add "pin" to the list of words for detecting password entry from eshell
+       (push "pin" password-word-equivalents)
+       (setq eshell-password-prompt-regexp 
+             (format "\\(%s\\).*:\\s *\\'" (regexp-opt password-word-equivalents)))
+
+       (setq eshell-scroll-to-bottom-on-input 'all
+             eshell-error-if-no-glob t
+             eshell-hist-ignoredups t
+             eshell-save-history-on-exit t
+             eshell-prefer-lisp-functions nil
+             eshell-history-size 2048
+             eshell-destroy-buffer-when-process-dies t)
+
+       (defun ds/eshell-setup ()
+         (defvar eshell-visual-commands '()
+           "Commands in shell that need a \"real\" terminal")
+         (add-to-list 'eshell-visual-commands "ssh")
+         (add-to-list 'eshell-visual-commands "tail")
+         (add-to-list 'eshell-visual-commands "top")
+         (add-to-list 'eshell-visual-commands "htop")
+         (setq eshell-path-env (getenv "PATH"))
+         (set-face-attribute 'eshell-prompt-face nil
+                             :foreground (ds/get-zenburn-color "fg")
+                             :weight 'normal))
+
+
+       (defun ds/eshell-append-history ()
+         "Call `eshell-write-history' with the `append' parameter set to `t'."
+         (when eshell-history-ring
+           (let ((newest-cmd-ring (make-ring 1)))
+             (ring-insert newest-cmd-ring (car (ring-elements eshell-history-ring)))
+             (let ((eshell-history-ring newest-cmd-ring))
+               (eshell-write-history eshell-history-file-name t))))))
+   #+END_SRC
+
+   Autosuggest like my zsh setup
+
+   #+BEGIN_SRC emacs-lisp
+     (defvar company-require-match nil)
+     (make-variable-buffer-local 'company-require-match)
+     (use-package esh-autosuggest
+       :ensure t
+       :hook ((eshell-mode . esh-autosuggest-mode)
+              (eshell-mode . ds/esh-autosuggest-setup))
+       :init
+       (require 'subr-x)
+       (defun ds/esh-autosuggest-setup ()
+         (message "ds/esh-autesuggest-setup")
+         (set-variable 'company-require-match nil)
+         (face-remap-add-relative 'company-preview-common 'ds/esh-autosuggest-face)))
+   #+END_SRC
+
+   More completions
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package pcmpl-args
+       :ensure t
+       :config
+
+       ;; ============================================================
+       ;;
+       ;; pacman completion
+       ;;
+       ;; ============================================================
+       (defvar pcomplete-pacman-installed-packages
+         (split-string (shell-command-to-string "pacman -Qq"))
+         "p-completion candidates for `pacman' regarding installed packages")
+
+       (defvar pcomplete-pacman-web-packages
+         (split-string (shell-command-to-string "pacman -Slq"))
+         "p-completion candidates for `pacman' regarding packages on the web")
+
+       (defun pcomplete/pacman ()
+         "Completion rule for the `pacman' command."
+         (pcomplete-opt "DFQRSUilos")
+         (cond ((pcomplete-test "-[DRQ][a-z]*")
+                (pcomplete-here pcomplete-pacman-installed-packages))
+               ((pcomplete-test "-[FS][a-z]*")
+                (pcomplete-here pcomplete-pacman-web-packages))
+               (t (pcomplete-here (pcomplete-entries)))))
+
+       ;; ============================================================
+       ;;
+       ;; systemctl completion
+       ;;
+       ;; ============================================================
+       (defvar pcomplete-systemctl-commands
+         '("disable" "enable" "status" "start" "restart" "stop" "daemon-reload")
+         "p-completion candidates for `systemctl' main commands")
+
+       (defvar pcomplete-systemd-units
+         (split-string
+          (shell-command-to-string
+           "(systemctl list-units --all --full --no-legend;systemctl list-unit-files --full --no-legend)|while read -r a b; do echo \" $a\";done;"))
+         "p-completion candidates for all `systemd' units")
+
+       (defvar pcomplete-systemd-user-units
+         (split-string
+          (shell-command-to-string
+           "(systemctl list-units --user --all --full --no-legend;systemctl list-unit-files --user --full --no-legend)|while read -r a b;do echo \" $a\";done;"))
+         "p-completion candidates for all `systemd' user units")
+
+       (defun pcomplete/systemctl ()
+         "Completion rules for the `systemctl' command."
+         (pcomplete-here (append pcomplete-systemctl-commands '("--user")))
+         (cond ((pcomplete-test "--user")
+                (pcomplete-here pcomplete-systemctl-commands)
+                (pcomplete-here pcomplete-systemd-user-units))
+               ((pcomplete-test "daemon-reload")
+                (pcomplete-here))
+               (t (pcomplete-here pcomplete-systemd-units)))))
+   #+END_SRC
+
+   Prompt setup for eshell
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package eshell
+       :init
+       (require 'dash)
+       (require 's)
+       (require 'magit)
+       (defvar ds/eshell-sep " | "
+         "Separator between esh-sections")
+
+       (defvar ds/eshell-section-delim " "
+         "Separator between an esh-section icon and form")
+
+       (defvar ds/eshell-header "\n "
+         "Eshell prompt header")
+
+       (setq eshell-prompt-regexp "^ [$#] ")
+
+       (defmacro ds/with-face (STR &rest PROPS)
+         "Return STR propertized with PROPS."
+         `(propertize ,STR 'face (list ,@PROPS)))
+
+       (defmacro ds/eshell-section (NAME ICON FORM &rest PROPS)
+         "Build eshell section NAME with ICON prepended to evaled FORM with PROPS."
+         `(defvar ,NAME
+            (lambda () (when ,FORM
+                         (let ((result (concat ,ICON (if (> (length ,ICON) 0) ds/eshell-section-delim "") ,FORM)))
+                           (if ,@PROPS
+                               (ds/with-face result ,@PROPS)
+                             result))))
+            "Eshell prompt section - ,NAME"))
+
+
+       (defun ds/split-directory-prompt (directory)
+         (if (string-match-p ".*/.*" directory)
+             (list (file-name-directory directory) (file-name-base directory))
+           (list "" directory)))
+
+       (defun ds/pwd-shorten-dirs (pwd)
+         "Shorten all directory names in PWD except the last two."
+         (let ((p-lst (split-string pwd "/")))
+           (if (> (length p-lst) 2)
+               (concat
+                (mapconcat (lambda (elm) (if (zerop (length elm)) ""
+                                           (substring elm 0 1)))
+                           (butlast p-lst 2)
+                           "/")
+                "/"
+                (mapconcat (lambda (elm) elm)
+                           (last p-lst 2)
+                           "/"))
+             pwd)))  ;; Otherwise, we just return the PWD
+
+       (ds/eshell-section esh-dir
+                          (ds/with-face "" `(:foreground ,(ds/get-zenburn-color "fg-1") :weight bold))
+                          (let* ((dirparts (ds/split-directory-prompt (ds/pwd-shorten-dirs (abbreviate-file-name (eshell/pwd)))))
+                                 (parent (car dirparts))
+                                 (dirname (cadr dirparts)))
+                            (concat (ds/with-face parent `(:foreground ,(ds/get-zenburn-color "bg+3")))
+                                    (ds/with-face dirname `(:foreground ,(ds/get-zenburn-color "fg-1") :weight bold)))))
+
+       (ds/eshell-section esh-git
+                          (ds/with-face "" `(:foreground ,(ds/get-zenburn-color "orange")))
+                          (let* ((unstaged-count (length (magit-unstaged-files)))
+                                 (staged-count (length (magit-staged-files)))
+                                 (untracked-count (length (magit-untracked-files)))
+                                 (unstaged (if (> unstaged-count 0)
+                                               (ds/with-face
+                                                (concat " (" (number-to-string unstaged-count) ")")
+                                                `(:foreground ,(ds/get-zenburn-color "yellow")))
+                                             ""))
+                                 (staged (if (> staged-count 0)
+                                             (ds/with-face
+                                              (concat " (" (number-to-string staged-count) ")")
+                                              `(:foreground ,(ds/get-zenburn-color "green")))
+                                           ""))
+                                 (untracked (if (> untracked-count 0)
+                                                (ds/with-face
+                                                 (concat " (" (number-to-string untracked-count) ")")
+                                                 `(:foreground ,(ds/get-zenburn-color "red")))
+                                              "")))
+                            (if (magit-get-current-branch)
+                                (concat (ds/with-face (magit-get-current-branch)
+                                                      `(:foreground ,(ds/get-zenburn-color "blue")))
+                                        staged unstaged untracked)
+                              nil)))
+
+       (ds/eshell-section esh-last-command-status
+                          ""
+                          (if (eq eshell-last-command-status 0)
+                              nil
+                            (ds/with-face ""  `(:foreground ,(ds/get-zenburn-color "red+1")))))
+
+       (ds/eshell-section esh-clock
+                          ""
+                          (format-time-string "%H:%M" (current-time)) `(:foreground ,(ds/get-zenburn-color "green")))
+
+       (if (boundp 'set-fontset-font)
+           (progn (set-fontset-font t '(#Xf017 . #Xf017) "fontawesome")
+                  (set-fontset-font t '(#Xf011 . #Xf011) "fontawesome")
+                  (set-fontset-font t '(#Xf026 . #Xf028) "fontawesome")))
+
+       ;; Choose which eshell-funcs to enable
+       (defvar ds/eshell-funcs nil
+         "Eshell prompt sections")
+
+       (defun ds/eshell-acc (acc x)
+         "Accumulator for evaluating and concatenating esh-sections."
+         (if (and (listp x) (not (functionp x)))
+             (concat acc (-reduce-from 'ds/eshell-acc "" x) "\n ")
+           (--if-let (funcall x)
+               (if (s-blank? acc)
+                   it
+                 (concat acc
+                         (if (string= "\n" (substring acc (- (length acc) 1) (length acc)))
+                             " "
+                           ds/eshell-sep)
+                         it))
+             acc)))
+
+       (defun ds/eshell-prompt-func ()
+         "Build `eshell-prompt-function'"
+         (concat ds/eshell-header
+                 (replace-regexp-in-string "\n $" "" (-reduce-from 'ds/eshell-acc "" ds/eshell-funcs))
+                 "\n"
+                 (concat " " (if (= (user-uid) 0) "#" "$") " ")))
+       ;; Choose which eshell-funcs to enable
+       (defvar ds/eshell-funcs nil
+         "Eshell prompt sections")
+
+       ;; Choose which eshell-funcs to enable
+       (setq ds/eshell-funcs (list (list esh-dir esh-clock) (list esh-git) (list esh-last-command-status)))
+
+       ;; Enable the new eshell prompt
+       (setq eshell-prompt-function 'ds/eshell-prompt-func))
+   #+END_SRC
+
+
+** Org
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package org
+       :ensure org-plus-contrib
+       :mode (("\\.org$" . org-mode))
+       :pin org
+       :custom-face
+       (org-mode-line-clock
+        ((t (:foreground nil :background nil :underline nil :box nil))))
+       :hook (org-cycle . ds/org-logbook-cycle-hook)
+       :init
+       (defvar org-directory "~/org" "Directory for org files.")
+       (defvar org-time-clocksum-format "%d:%.02d")
+       :config
+       (condition-case nil
+           ;; make the org dir if it is not there already
+           (make-directory org-directory t) 
+         (error nil))
+       (setq org-log-done 'time)
+       (setq org-clock-idle-time 15)
+       (setq org-clock-mode-line-total 'current)
+       (setq org-log-into-drawer "LOGBOOK")
+       (setq org-clock-into-drawer "LOGBOOK")
+       (setq org-duration-format '(("h" . t) (special . 2)))
+       (setq org-src-window-setup 'current-window)
+       ;; Resume clocking task when emacs is restarted
+       (org-clock-persistence-insinuate)
+       ;; Save the running clock and all clock history when exiting Emacs, load it on startup
+       (setq org-clock-persist t)
+       ;; Resume clocking task on clock-in if the clock is open
+       (setq org-clock-in-resume t)
+       ;; Do not prompt to resume an active clock, just resume it
+       (setq org-clock-persist-query-resume nil)
+       ;; Sometimes I change tasks I'm clocking quickly - this removes clocked tasks
+       ;; with 0:00 duration
+       (setq org-clock-out-remove-zero-time-clocks t)
+       ;; Clock out when moving task to a done state
+       (setq org-clock-out-when-done t)
+       ;; Enable auto clock resolution for finding open clocks
+       (setq org-clock-auto-clock-resolution (quote when-no-clock-is-running))
+       ;; Include current clocking task in clock reports
+       (setq org-clock-report-include-clocking-task t)
+       ;; use pretty things for the clocktable
+       (setq org-pretty-entities t)
+
+       (setq org-todo-keywords
+             '((sequence "TODO(t)" "IN-PROGRESS(i!)" "WAITING(w@)" "|" "WILL-NOT-IMPLEMENT(k@)" "DONE(d)")
+               (sequence "BUG(b)" "RESOLVING(r!)" "|" "NON-ISSUE(n@)" "PATCHED(p)")))
+  
+       (setq org-ditaa-jar-path "/usr/share/java/ditaa/ditaa-0_10.jar")
+       (org-babel-do-load-languages
+        'org-babel-load-languages
+        '((shell . t)
+          (ditaa . t)))
+       ;; expand logbook on org all expand
+       (defun ds/expand-logbook-drawer ()
+         "Expand the closest logbook drawer."
+         (interactive)
+         (search-forward ":LOGBOOK:")
+         (org-cycle))
+
+       (defun ds/org-logbook-cycle-hook (ds/drawer-curr-state)
+         "When the MY/VAR/CURR-STATE is \"all\", open up logbooks."
+         (interactive)
+         (message "State changed")
+         (when (eq ds/drawer-curr-state "all")
+           (ds/expand-logbook-drawer)))
+       )
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package org-bullets
+       :ensure t
+       :after (org)
+       :hook (org-mode . org-bullets-mode))
+   #+END_SRC
+** Multiple Cursors
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package multiple-cursors
+       :ensure t
+       :bind (("C->" . mc/mark-next-like-this)
+              ("M-j" . mc/mark-next-like-this)
+              ("C-<" . mc/mark-previous-like-this)
+              ("C-M-j" . mc/mark-previous-like-this)))
+   #+END_SRC
+
+
+** Projectile
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package projectile
+       :pin melpa
+       :ensure t
+       :init
+       (defvar projectile-remember-window-configs t)
+       :hook (after-init . projectile-mode)
+       :config
+       (setq projectile-mode-line
+             '(:eval
+               (if (file-remote-p default-directory)
+                   " NoProj"
+                 (format " Proj[%s]"
+                         (projectile-project-name)))))
+
+       (projectile-register-project-type
+        'npm '("package.json")
+        :compile "npm install"
+        :test "npm test"
+        :run "npm start"
+        :test-suffix ".spec")
+
+       (projectile-register-project-type
+        'go '("go.mod")
+        :compile "vgo build"
+        :test "vgo test"
+        :test-suffix "_test.go"))
+   #+END_SRC
+
+** Exec Path from Shell
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package exec-path-from-shell
+       :ensure t
+       :hook (after-init . exec-path-from-shell-initialize))
+   #+END_SRC
+
+** Direnv
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package direnv
+       :ensure
+       :config
+       :hook ((after-init . direnv-mode)
+              (eshell-directory-change . direnv-update-directory-environment)))
+   #+END_SRC
+
+** Flx
+   #+BEGIN_SRC emacs-lisp
+     (use-package flx
+       :ensure t)
+   #+END_SRC
+   
+** Avy
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package avy
+       :ensure t
+       :bind (("C-c j j" . avy-goto-char-in-line)
+              ("C-c j l" . avy-goto-line)
+              ("C-c j w" . avy-goto-word-or-subword-1)
+              ("C-c j c" . avy-goto-char))
+       :config
+       (setq avy-keys '(?t ?n ?h ?e ?o ?s)))
+   #+END_SRC
+
+** Smex
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package smex
+       :ensure t)
+   #+END_SRC
+
+** Ivy
+   
+   #+BEGIN_SRC emacs-lisp
+     (use-package ivy
+       :ensure t
+       :diminish (ivy-mode . "")
+       :bind (("C-x C-b" . ivy-switch-buffer)
+              :map ivy-minibuffer-map
+              ("C-'" . ivy-avy)
+              ("C-e" . ivy-alt-done))
+       :config
+       (ivy-mode 1)
+       ;; add ‘recentf-mode’ and bookmarks to ‘ivy-switch-buffer’.
+       (setq ivy-use-virtual-buffers t)
+       ;; recursive minibuffer
+       (setq enable-recursive-minibuffers t)
+       ;; count display
+       (setq ivy-count-format "(%d/%d) ")
+       ;; wrap
+       (setq ivy-wrap t)
+       ;; number of result lines to display
+       (setq ivy-height 30)
+       ;; no regexp by default
+       (setq ivy-initial-inputs-alist nil)
+       ;; configure regexp engine.
+       (setq ivy-re-builders-alist
+             ;; allow input not in order
+             '((t . ivy--regex-fuzzy)))
+       (defun ds/custom-ivy-faces ()
+         (set-face-attribute 'ivy-subdir nil :foreground (ds/get-zenburn-color "blue-1") :background nil :weight 'bold)
+         (set-face-attribute 'ivy-remote nil :foreground (ds/get-zenburn-color "red-1") :background nil :weight 'bold)
+         (set-face-attribute 'ivy-current-match nil :foreground nil :background (ds/get-zenburn-color "bg+3") :box (ds/get-zenburn-color "blue") :underline nil)
+         (set-face-attribute 'ivy-minibuffer-match-face-1 nil :background nil :box (ds/get-zenburn-color "green-1") :underline nil)
+         (set-face-attribute 'ivy-minibuffer-match-face-2 nil :background nil :box (ds/get-zenburn-color "green-1") :underline nil)
+         (set-face-attribute 'ivy-minibuffer-match-face-3 nil :background nil :box (ds/get-zenburn-color "red-1") :underline nil)
+         (set-face-attribute 'ivy-minibuffer-match-face-4 nil :background nil :box (ds/get-zenburn-color "yellow-1") :underline nil))
+
+       (ds/custom-ivy-faces))
+
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package ivy-hydra
+       :ensure t)
+   #+END_SRC
+
+** Counsel
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package counsel
+       :ensure t
+       :bind (("M-x" . counsel-M-x)
+              ("C-x C-f" . counsel-find-file)
+              :map read-expression-map
+              ("C-r" . counsel-minibuffer-history))
+       :config
+       (push (concat (getenv "HOME") "/.local/share/applications/") counsel-linux-apps-directories)
+       (defun ds/counsel-linux-app-format-function (name comment exec)
+         "Default Linux application name formatter.
+     NAME is the name of the application, COMMENT its comment and EXEC
+     the command to launch it."
+         (format "% -45s %s"
+                 (propertize name 'face 'font-lock-builtin-face)
+                 (or comment "")))
+  
+       (setq counsel-linux-app-format-function #'ds/counsel-linux-app-format-function))
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package counsel-projectile
+       :ensure t
+       :hook (after-init . counsel-projectile-mode))
+   #+END_SRC
+
+** Swiper
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package swiper
+       :ensure t
+       :bind (("C-c s" . swiper))
+       :config
+       (add-to-list 'ivy-re-builders-alist '((swiper . ivy--regex-plus))))
+   #+END_SRC
+
+
+* Programming Packages
+
+
+** LSP
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package lsp-mode
+       :ensure t
+       :config
+       (use-package lsp-imenu
+         :hook (lsp-after-open . lsp-enable-imenu)))
+   #+END_SRC
+
+
+** Flycheck
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package flycheck
+       :ensure t
+       :hook ((flycheck-mode . ds/use-eslint-from-node-modules)
+              (after-init . global-flycheck-mode))
+  
+       :bind (:map flycheck-command-map
+                   ("l" . ds/toggle-flycheck-errors))
+  
+       :custom ((flycheck-emacs-lisp-load-path 'inherit)
+                (flycheck-display-errors-delay 0.4)
+                (flycheck-go-build-executable "vgo")
+                (flycheck-go-vet-executable "vgo")
+                (flycheck-go-test-executable "vgo"))
+  
+       :config
+       (setq-default flycheck-disabled-checkers
+                     (append flycheck-disabled-checkers
+                             '(javascript-jshint)))
+
+       (defun ds/toggle-flycheck-errors ()
+         (interactive)
+         (if (get-buffer flycheck-error-list-buffer)
+             (kill-buffer flycheck-error-list-buffer)
+           (flycheck-list-errors)))
+
+       (defun ds/use-eslint-from-node-modules ()
+         (setq-local flycheck-javascript-eslint-executable (ds/find-eslint-executable))))
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package flycheck-pos-tip
+       :ensure t
+       :after flycheck
+       :hook (after-init . flycheck-pos-tip-mode))
+   #+END_SRC
+   
+   
+** Nginx
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package nginx-mode
+       :ensure t)
+   #+END_SRC
+** Golang
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package go-mode
+       :ensure t
+       :hook (before-save . gofmt-before-save)
+       :custom (go-command "vgo"))
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package lsp-go
+       :ensure t
+       :hook (go-mode . lsp-go-enable))
+   #+END_SRC
+   
+
+** YAML
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package yaml-mode
+       :ensure t
+       :config
+       (add-to-list 'auto-mode-alist '("\\.yaml\\'" . yaml-mode))
+       (add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-mode)))
+   #+END_SRC
+** Protobuf
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package protobuf-mode
+       :ensure t
+       :hook (protobuf-mode . ds/protobuf-setup)
+       :config
+       (defun ds/protobuf-setup ()
+         (flycheck-define-checker protobuf-protoc
+           "A modified protobuf syntax checker using the protoc compiler.
+
+          See URL `https://developers.google.com/protocol-buffers/'."
+           :command ("protoc" "--error_format" "gcc"
+                     (eval (concat "--java_out=" (flycheck-temp-dir-system)))
+                     ;; include the directory with the file and it's parent directory
+                     (eval (concat "--proto_path=" (file-name-directory (buffer-file-name))))
+                     (eval (concat "--proto_path=" (file-truename (concat (file-name-directory (buffer-file-name)) "/../"))))
+                     source-inplace)
+           :error-patterns
+           ((info line-start (file-name) ":" line ":" column
+                  ": note: " (message) line-end)
+            (error line-start (file-name) ":" line ":" column
+                   ": " (message) line-end)
+            (error line-start
+                   (message "In file included from") " " (file-name) ":" line ":"
+                   column ":" line-end))
+           :modes protobuf-mode
+           :predicate buffer-file-name)))
+   #+END_SRC
+
+
+
+
+
+* Applications
+
+  Packages that are sort of "apps" on their own or interact with other
+  system apps, outside of the "development" scope
+
+** Kubernetes
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package kubernetes
+       :ensure t
+       :commands (kubernetes-overview)
+       :config
+       (ds/popup-thing-display-settings "*kubernetes logs*" top 0 0.33)
+       (setq kubernetes-poll-frequency 5))
+   #+END_SRC
+
+** PDF Tools
+   
+   #+BEGIN_SRC emacs-lisp
+     (use-package pdf-tools
+       :ensure t
+       :config
+       (pdf-tools-install))
+   #+END_SRC
+
+** Password Store
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package pass
+       :ensure t
+       :config
+       (use-package password-store-otp
+         :ensure t
+         :init
+
+         (defun ds/password-store-get-otp (record)
+           (interactive (list (password-store--completing-read)))
+           (password-store-otp-token-copy record))
+
+         (defun ds/pass-sentinel (process evt)
+           (message "process %s evt %s" process evt)
+           (with-current-buffer (process-buffer process)
+             (if (equal evt "finished\n")
+                 (let ((password (car (s-lines (s-chomp (buffer-string))))))
+                   (kill-buffer)
+                   (password-store-clear)
+                   (kill-new password)
+                   (setq password-store-kill-ring-pointer kill-ring-yank-pointer)
+                   (message "Copied password to the kill ring. Will clear in %s seconds." (password-store-timeout))
+                   (setq password-store-timeout-timer
+                         (run-at-time (password-store-timeout) nil 'password-store-clear))))
+             (if (string-match-p "^exited abnormally" evt)
+                 (let ((err (s-chomp (buffer-string))))
+                   (kill-buffer)
+                   (error err)))))
+
+         :config
+
+         (defun password-store-copy (entry)
+           "Add password for ENTRY to kill ring.
+
+     Clear previous password from kill ring.  Pointer to kill ring is
+     stored in `password-store-kill-ring-pointer'.  Password is cleared
+     after `password-store-timeout' seconds."
+           (interactive (list (password-store--completing-read)))
+           (make-process
+            :name "pass"
+            :buffer "pass-buffer"
+            :command `(,password-store-executable "show" ,entry)
+            :sentinel 'ds/pass-sentinel))))
+   #+END_SRC
+   
+** REST Client
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package restclient
+       :ensure t
+       :config
+       (ds/popup-thing-display-settings "*HTTP Response*" left 0 0.25))
+   #+END_SRC

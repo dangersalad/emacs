@@ -1,0 +1,10 @@
+/custom.el
+/elpa/
+/init.el
+/*.elc
+/tmp/
+/eshell/
+/org-clock-save.el
+/projectile-bookmarks.eld
+/recentf
+/tramp
