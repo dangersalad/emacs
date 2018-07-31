@@ -3,9 +3,19 @@
 
 (setq mc/cmds-to-run-for-all
       '(
+        c-electric-delete-forward
+        c-electric-paren
+        complete-symbol
+        electric-pair-delete-pair
         kill-region
+        org-self-insert-command
+        yaml-electric-backspace
+        yaml-electric-dash-and-dot
         ))
 
 (setq mc/cmds-to-run-once
       '(
+        counsel-M-x
+        ivy-done
+        ivy-switch-buffer
         ))

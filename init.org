@@ -1180,10 +1180,10 @@
    #+BEGIN_SRC emacs-lisp
      (use-package multiple-cursors
        :ensure t
-       :bind (("C->" . mc/mark-next-like-this)
-              ("M-j" . mc/mark-next-like-this)
-              ("C-<" . mc/mark-previous-like-this)
-              ("C-M-j" . mc/mark-previous-like-this)))
+       :bind (("C->" . mc/mark-next-like-this-symbol)
+              ("M-j" . mc/mark-next-like-this-symbol)
+              ("C-<" . mc/mark-previous-like-this-symbol)
+              ("C-M-j" . mc/mark-previous-like-this-symbol)))
    #+END_SRC
 
 
@@ -1346,10 +1346,16 @@
        (add-to-list 'ivy-re-builders-alist '((swiper . ivy--regex-plus))))
    #+END_SRC
 
+** Expand Region
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package expand-region
+       :ensure t
+       :bind (("C-c C-e" . er/expand-region)
+              ("C-c e" . er/expand-region)))
+   #+END_SRC
 
 * Programming Packages
-
-
 ** LSP
 
    #+BEGIN_SRC emacs-lisp
@@ -1360,6 +1366,20 @@
          :hook (lsp-after-open . lsp-enable-imenu)))
    #+END_SRC
 
+** Commenting
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package evil-nerd-commenter
+       :ensure t
+       :bind (("C-c C-/ C-/" . evilnc-comment-or-uncomment-lines)
+              ("C-c C-/ C-l" . evilnc-comment-or-uncomment-to-the-line)
+              ("C-c C-/ C-c" . evilnc-copy-and-comment-lines)
+              ("C-c C-/ C-p" . evilnc-comment-or-uncomment-paragraphs)
+              ("C-c C-_ C-_" . evilnc-comment-or-uncomment-lines)
+              ("C-c C-_ C-l" . evilnc-comment-or-uncomment-to-the-line)
+              ("C-c C-_ C-c" . evilnc-copy-and-comment-lines)
+              ("C-c C-_ C-p" . evilnc-comment-or-uncomment-paragraphs)))
+   #+END_SRC
 
 ** Flycheck
 
@@ -1412,6 +1432,7 @@
    #+BEGIN_SRC emacs-lisp
      (use-package go-mode
        :ensure t
+       :mode ("\\go.mod\\'" . fundamental-mode)
        :hook (before-save . gofmt-before-save)
        :custom (go-command "vgo"))
    #+END_SRC
@@ -1422,6 +1443,10 @@
        :hook (go-mode . lsp-go-enable))
    #+END_SRC
    
+   #+BEGIN_SRC emacs-lisp
+     (fset 'go-method-doc
+        (lambda (&optional arg) "Keyboard macro." (interactive "p") (kmacro-exec-ring-item (quote ([134217734 134217734 134217739 25 16 47 47 25 32 114 backspace 116 backspace 103 backspace 100 105 backspace 111 101 115 32 119 104 97 116 32 105 116 32 115 97 112 backspace 121 115 46] 0 "%d")) arg)))
+   #+END_SRC
 
 ** YAML
 
@@ -1448,7 +1473,13 @@
                      (eval (concat "--java_out=" (flycheck-temp-dir-system)))
                      ;; include the directory with the file and it's parent directory
                      (eval (concat "--proto_path=" (file-name-directory (buffer-file-name))))
-                     (eval (concat "--proto_path=" (file-truename (concat (file-name-directory (buffer-file-name)) "/../"))))
+                     (eval (concat "--proto_path=" (file-truename (concat (file-name-directory (buffer-file-name)) "../"))))
+                     (eval (concat "--proto_path=" (file-truename (concat (file-name-directory (buffer-file-name)) "lib/proto"))))
+                     (eval (concat "--proto_path=" (file-truename (concat (file-name-directory (buffer-file-name)) "third_party"))))
+                     ;; (eval (let ((lib-dir (concat (file-name-directory (buffer-file-name)) "lib/proto"))
+                     ;;       (thirdparty-dir (concat (file-name-directory (buffer-file-name)) "third_party")))
+                     ;;         (concat (if (file-directory-p lib-dir) (concat "--proto_path=" (file-truename lib-dir)) "") " "
+                     ;;                 (if (file-directory-p thirdparty-dir) (concat "--proto_path=" (file-truename thirdparty-dir)) ""))))
                      source-inplace)
            :error-patterns
            ((info line-start (file-name) ":" line ":" column
@@ -1461,10 +1492,61 @@
            :modes protobuf-mode
            :predicate buffer-file-name)))
    #+END_SRC
+** SQL
 
+   #+BEGIN_SRC emacs-lisp
+     (defun ds/postgresql-highlight ()
+       (sql-mode)
+       (sql-highlight-postgres-keywords))
 
+     (add-to-list 'auto-mode-alist
+                  '("\\.sql$" . ds/postgresql-highlight))
+   #+END_SRC
 
+   #+BEGIN_SRC emacs-lisp
+     (use-package sql-indent
+       :ensure t
+       :hook (sql-mode . sqlind-minor-mode))
+   #+END_SRC
+** Web Frontend
 
+   #+BEGIN_SRC emacs-lisp
+     (defun ds/eslint-fix ()
+       "Format the current file with ESLint."
+       (interactive)
+       (let ((eslint (ds/find-eslint-executable)))
+         (if eslint
+             (progn (call-process eslint nil "*ESLint Errors*" nil "--fix" buffer-file-name)
+                    (revert-buffer t t t))
+           (message "ESLint not found."))))
+     (defun ds/setup-eslint-fix ()
+       (add-hook 'after-save-hook #'ds/eslint-fix))
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package js
+       :hook ((js-mode . ds/setup-eslint-fix))
+       :config
+       (setq js-indent-level 2))
+   #+END_SRC
+   
+   #+BEGIN_SRC emacs-lisp
+     (use-package web-mode
+       :ensure t
+       :hook ((web-mode . ds/setup-eslint-fix))
+       :mode ("\\.vue\\'" "\\.html\\'")
+       :config
+       (setq web-mode-code-indent-offset 2)
+       (with-eval-after-load 'flycheck
+         (flycheck-add-mode 'javascript-eslint 'web-mode)))
+   #+END_SRC
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package lsp-javascript-typescript
+       :ensure t
+       :hook ((js-mode . lsp-javascript-typescript-enable)
+              (web-mode . lsp-javascript-typescript-enable)))
+   #+END_SRC
 
 * Applications
 
