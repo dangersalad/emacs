@@ -33,10 +33,10 @@ browser = firefox
 #cursor = #dcdccc
 foreground = #dcdccc
 foreground_bold = #ffffff
-background = #1c1c1c
+# background = #1c1c1c
 
 # 20% background transparency (requires a compositor)
-#background = rgba(63, 63, 63, 0.8)
+background = rgba(28, 28, 28, 0)
 
 # if unset, will reverse foreground and background
 highlight = #3f3f3f

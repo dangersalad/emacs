@@ -16,5 +16,15 @@ xsetroot -solid "#2c2c2c"
 
 export PATH=$HOME/.emacs/exwm/bin:$PATH
 
+if which compton >/dev/null 2>&1
+then
+    compton &
+fi
+
+if which wallpaper >/dev/null 2>&1
+then
+    wallpaper
+fi
+
 # disable caps lock
 setxkbmap -option ctrl:nocaps
