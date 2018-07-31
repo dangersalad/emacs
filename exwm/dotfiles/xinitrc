@@ -1,0 +1,38 @@
+[[ -f $HOME/.xinitrc.local ]] && . $HOME/.xinitrc.local
+# Disable access control
+# xhost +SI:localuser:$USER
+
+# Themes, etc
+# gnome-settings-daemon &
+
+# Fallback cursor
+xsetroot -cursor_name left_ptr
+
+setxkbmap -option ctrl:nocaps
+
+# Keyboard repeat rate
+# xset r rate 200 60
+
+# export ssh auth socket
+if [[ -z "$XDG_RUNTIME_DIR" ]]
+then
+    default_ssh_sock="/var/run/user/$(grep $USER /etc/passwd | awk -F : '{print $3}')/gnupg/S.gpg-agent.ssh"
+else
+    default_ssh_sock="/var$XDG_RUNTIME_DIR/gnupg/S.gpg-agent.ssh"
+fi
+if [[ -S "$default_ssh_sock" ]]
+then
+    export SSH_AUTH_SOCK="$default_ssh_sock"
+else
+    export SSH_AUTH_SOCK="$(journalctl --user -u gpg-agent -b | grep -Eo 'ssh socket \((/[^/]+)+\.ssh' | tail -1 | sed 's/ssh socket (//')"
+    if [[ -z "$SSH_AUTH_SOCK" ]]
+    then
+        export SSH_AUTH_SOCK="$default_ssh_sock"
+    fi
+fi
+
+# turn on numlock
+numlockx &
+
+# Start Emacs
+exec dbus-launch --exit-with-session emacs

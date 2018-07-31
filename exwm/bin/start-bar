@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# killall lemonbar && echo "Restaring bar" || echo "Starting bar"
+# killall polybar && echo "Restaring bar" || echo "Starting bar"
+killall yabar && echo "Restaring bar" || echo "Starting bar"
+
+cd "$HOME/.emacs.d/exwm/yabar"
+exec yabar -c yabar.conf
+# exec polybar default
+# while true; do $HOME/.emacs.d/exwm/bin/lemonbar-data; done | exec lemonbar -b -f "Input Sans:size=8" -f "Font Awesome" -B "#2c2c2c" -F "#dcdccc"
+

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+wksp="$(emacsclient --eval 'exwm-workspace-current-index')"
+
+echo "<span color='#cc9393'></span> $wksp"

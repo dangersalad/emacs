@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+INTERFACE="$(ip route | grep -o -m1 -E '(enp|wlp)[a-z0-9]+')"
+
+COLOR="#a9a999"
+CODE=0
+if [[ $(expr $INTERFACE : wlp) -gt 0 ]]
+then
+    ESSID=$(iwconfig 2>/dev/null | grep ESSID | sed -r 's/.*ESSID:"(.*)"/\1/')
+    TYPE=" $ESSID"
+elif [[ $(expr $INTERFACE : enp) -gt 0 ]]
+then
+    TYPE=""
+else
+    TYPE=""
+    COLOR="#dca3a3"
+    CODE=33
+fi
+
+echo "<span color='$COLOR'>$TYPE</span>"

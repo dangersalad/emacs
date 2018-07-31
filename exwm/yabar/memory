@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+FREEOUT="$(free -b)"
+TOTAL="$(echo "$FREEOUT" | grep Mem | awk '{print $2}')"
+USED="$(echo "$FREEOUT" | grep Mem | awk '{print $3}')"
+PERCENT=$(bc <<<"scale=0; (100*$USED)/$TOTAL")
+
+COLOR="#7f9f7f"
+if [[ ${PERCENT} -gt 85 ]]
+then
+    COLOR="#dca3a3"
+elif [[ ${PERCENT} -gt 65 ]]
+then
+    COLOR="#c3bf9f"
+fi
+
+SCALE=0
+
+while [[ $(bc <<<"$USED >= 1024") -eq 1 ]]
+do
+    USED=$(bc <<<"scale=2; $USED / 1024")
+    SCALE=$((SCALE+1))
+done
+
+case $SCALE in
+    1) USEDUNIT="K";;
+    2) USEDUNIT="M";;
+    3) USEDUNIT="G";;
+esac
+
+SCALE=0
+
+while [[ $(bc <<<"$TOTAL >= 1024") -eq 1 ]]
+do
+    TOTAL=$(bc <<<"scale=2; $TOTAL / 1024")
+    SCALE=$((SCALE+1))
+done
+
+case $SCALE in
+    1) TOTALUNIT="K";;
+    2) TOTALUNIT="M";;
+    3) TOTALUNIT="G";;
+esac
+
+
+
+echo "RAM: <span color='$COLOR'>${PERCENT}% ${USED}${USEDUNIT}B/${TOTAL}${TOTALUNIT}B</span>"

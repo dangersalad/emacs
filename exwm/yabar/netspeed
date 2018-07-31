@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+FAIL() {
+    echo "<span color='#a9a999'>0.0 b/s $SYMBOL</span>"
+}
+
+IF="$(ip addr | grep -o -E '(enp|wlp)[a-z0-9]+$')"
+
+
+tmpfile=/tmp/$USER-netspeed-unit
+
+declare -a units
+units=( "b" "B" )
+
+if [[ -n "$BLOCK_BUTTON" ]]
+then
+    case $BLOCK_BUTTON in
+        1|4) current=$[$(cat $tmpfile) + 1];;
+        5) current=$[$(cat $tmpfile) - 1];;
+    esac
+else
+    current=$(cat $tmpfile)
+fi
+
+[[ -z "$current" ]] || [[ "$current" -ge "${#units[@]}" ]] && current=0
+
+[[ "$current" -lt 0 ]] && current=$[${#units[@]} - 1]
+
+echo "$current" > $tmpfile
+
+REPORT=${units[$current]}
+
+down_r1=$(cat /sys/class/net/$IF/statistics/rx_bytes) || FAIL
+up_r1=$(cat /sys/class/net/$IF/statistics/tx_bytes) || FAIL
+sleep 0.5s
+down_r2=$(cat /sys/class/net/$IF/statistics/rx_bytes) || FAIL
+up_r2=$(cat /sys/class/net/$IF/statistics/tx_bytes) || FAIL
+
+for dType in down up
+do
+    if [[ $dType = up ]]
+    then
+        R1=$up_r1
+        R2=$up_r2
+        SYMBOL=
+    else
+        R1=$down_r1
+        R2=$down_r2
+        SYMBOL=
+    fi
+
+    BPS=$(bc <<<"($R2 - $R1)*2")
+    if [[ "$REPORT" = "b" ]]
+    then
+        BPS=$(bc <<<"($R2 - $R1)*8*2")
+    fi
+
+    SCALE=0
+
+    while [[ $(bc <<<"$BPS >= 1024") -eq 1 ]]
+    do
+        BPS=$(bc <<<"scale=2; $BPS / 1024")
+        SCALE=$((SCALE+1))
+    done
+
+    case $SCALE in
+        1) UNIT="K";;
+        2) UNIT="M";;
+        3) UNIT="G";;
+    esac
+
+    # BPS="$(echo $BPS | sed 's/^\./0./')"
+
+    final=$final$(printf "<span font='Monospace Bold 12px'>%6.2f %-4s</span> %s" $BPS ${UNIT}${REPORT}/s $SYMBOL)" "
+
+done
+
+echo "<span color='#a9a999'>$final</span>"

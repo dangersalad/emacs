@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+partitions=$(lsblk -p -r --output NAME,MOUNTPOINT \
+                    | grep -v '^/dev/loop' \
+                    | grep ' /' \
+                    | sed -e 's~/dev/~~' -e 's/ /:/' \
+                    | sort -u -r)
+
+output=""
+
+okcount=0
+
+displaycutoff=75
+
+for dp in $partitions
+do
+    disk="${dp%:*}"
+    part="${dp##*:}"
+    dfline="$(df -h "$part" 2>/dev/null | tail -1)"
+    if [[ -n "$dfline" ]]
+    then
+        size="$(echo "$dfline" | awk '{print $2}')"
+        used="$(echo "$dfline" | awk '{print $3}')"
+        percent="$(echo "$dfline" | awk '{print $5}')"
+        color="#7f9f7f"
+        if [[ ${percent%%%} -gt 85 ]]
+        then
+            color="#dca3a3"
+        elif [[ ${percent%%%} -gt 75 ]]
+        then
+            color="#c3bf9f"
+        fi
+
+        if [[ ${percent%%%} -gt $displaycutoff ]]
+        then
+            output="${output}<span color='#6c6c6c'>$(echo "$disk" | sed 's~mapper/~~')</span> <span color='#a9a999'>${part}</span> <span color='$color'>${used}/${size}</span> "
+        else
+            okcount=$[$okcount + 1]
+        fi
+    fi
+done
+
+if [[ $okcount -gt 0 ]]
+then
+    output="<span color='#7f9f7f'>$okcount &lt; $displaycutoff%</span>   ${output}"
+fi
+
+
+
+echo " Disks: $output "

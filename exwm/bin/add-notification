@@ -1,0 +1,15 @@
+#!/bin/env bash
+
+cache_file=~/.cache/i3blocks/notification
+
+function cleanstring {
+    sed -e "s/'/'\"'\"'/g" \
+        -e 's/&/and/g' \
+        -e ':a;N;$!ba;s/\n/ - /g' <<<"$1"
+}
+
+# store the notification
+echo "APPNAME='$(cleanstring "$1")'; SUMMARY='$(cleanstring "$2")'; BODY='$(cleanstring "$3")'; ICON='$(cleanstring "$4")'; URGENCY='$(cleanstring "$5")'" >> "$cache_file"
+
+
+

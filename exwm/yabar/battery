@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+if ! which acpi >/dev/null 2>&1
+then
+    exit 0
+fi
+
+BATTERY="$(acpi -b | grep -v unavailable | grep -E -o '[0-9]{1,3}%' | sed -n 1p)"
+
+is_charging="$(acpi -b | grep -i -o ' charging,')"
+
+COLOR="#7f9f7f"
+CODE=0
+SYM=
+if [[ ${BATTERY%%%} -lt 5 ]]
+then
+    # i3-nagbar -m "Battery at ${BATTERY}" -f "pango:Input Mono 12" >/dev/null 2>&1 &
+    COLOR="#dca3a3"
+    CODE=33
+    SYM=
+elif [[ ${BATTERY%%%} -lt 10 ]]
+then
+    COLOR="#dca3a3"
+    CODE=33
+    SYM=
+elif [[ ${BATTERY%%%} -lt 30 ]]
+then
+    COLOR="#c3bf9f"
+    SYM=
+elif [[ ${BATTERY%%%} -lt 50 ]]
+then
+    SYM=
+elif [[ ${BATTERY%%%} -lt 75 ]]
+then
+    SYM=
+fi
+
+if [ -n "$is_charging" ]
+then
+    BATTERY="<span color='#7f9f7f'></span> $BATTERY"
+fi
+
+echo "<span color='$COLOR'>$SYM</span> $BATTERY"

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+FONT_DIR=/usr/share/fonts/local
+
+if [[ -d "$FONT_DIR" ]]
+then
+    xset +fp $FONT_DIR
+    xset fp rehash
+fi
+
+xsetroot -solid "#2c2c2c"
+
+[[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
+
+"$HOME/.emacs/exwm/bin/touchpad-fixes" &
+
+export PATH=$HOME/.emacs/exwm/bin:$PATH
+
+# disable caps lock
+setxkbmap -option ctrl:nocaps

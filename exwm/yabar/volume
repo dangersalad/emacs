@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+action=${1:-display}
+
+if [[ "$action" != "display" ]]
+then
+    case $action in
+        mute) pulseaudio-ctl mute;;
+        up) pulseaudio-ctl up;;
+        down) pulseaudio-ctl down;;
+    esac
+    exit
+fi
+
+VOLUME="$(pulseaudio-ctl fs | awk '{print $1}' | tr -d ' ')"
+MUTED="$(pulseaudio-ctl fs | awk '{print $2}' | grep -o -E '(yes|no)' | tr -d ' ')"
+
+COLOR="#dcdccc"
+
+if [[ $VOLUME -gt 49 ]]
+then
+    ICON=
+elif [[ $VOLUME -gt 0 ]]
+then
+    ICON=
+else
+    ICON=
+fi
+
+if [[ $MUTED = yes ]]
+then
+    COLOR="#5f5f5f"
+    ICON=
+fi
+
+echo "<span color='$COLOR'>$ICON $VOLUME%</span>"

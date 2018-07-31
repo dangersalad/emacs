@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+CODE=0
+
+LOCALTIME="$( date "+ %l:%M %P %Z" )"
+
+echo "$LOCALTIME"
+
+exit $CODE

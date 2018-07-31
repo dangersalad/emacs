@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+notification_count="$(emacsclient --eval '(length eosd-notification-list)')"
+
+if [[ "$1" == "show" ]]
+then
+    emacsclient --eval '(ds/exwm-eosd)'
+    exit
+fi
+
+if [[ "$notification_count" -eq 0 ]]
+then
+    echo ""
+else
+    echo "<span color='#7f9f7f'></span> $notification_count <span color='#4c4c4c'>|</span> "
+fi
