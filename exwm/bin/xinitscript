@@ -12,19 +12,7 @@ xsetroot -solid "#2c2c2c"
 
 [[ -f ~/.Xresources ]] && xrdb -merge ~/.Xresources
 
-"$HOME/.emacs/exwm/bin/touchpad-fixes" &
-
-export PATH=$HOME/.emacs/exwm/bin:$PATH
-
-if which compton >/dev/null 2>&1
-then
-    compton &
-fi
-
-if which wallpaper >/dev/null 2>&1
-then
-    wallpaper
-fi
+export PATH=$HOME/.emacs.d/exwm/bin:$PATH
 
 # disable caps lock
 setxkbmap -option ctrl:nocaps

@@ -23,5 +23,5 @@ then
     BGEXT="png"
 fi
 
-feh --bg-scale "$HOME/.background.$BGEXT"
+feh --bg-fill "$HOME/.background.$BGEXT"
 

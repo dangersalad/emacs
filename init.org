@@ -1651,6 +1651,8 @@
       (exwm-input-set-key (kbd "C-s-f") #'exwm-layout-toggle-fullscreen)
       ;; do xinit stuff
       (start-process "" nil (concat user-emacs-directory "exwm/bin/xinitscript"))
+      (start-process "" nil (concat user-emacs-directory "exwm/bin/wallpaper"))
+      (start-process "" nil "compton")
       ;; disable flycheck for exwm buffers
       (add-hook 'exwm-mode-hook (lambda () (flycheck-mode -1))))
   #+END_SRC
