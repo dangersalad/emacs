@@ -590,7 +590,6 @@
      (add-to-list 'auto-mode-alist '("\\.chordpro$" . chordpro-mode))
    #+END_SRC
 
-
 * Basic Packages
 ** Zenburn
 
@@ -1541,10 +1540,23 @@
    #+BEGIN_SRC emacs-lisp
      (use-package lsp-javascript-typescript
        :ensure t
-       :hook ((js-mode . lsp-javascript-typescript-enable)
-              (web-mode . lsp-javascript-typescript-enable)))
+       :hook ((js-mode . lsp-javascript-typescript-enable)))
    #+END_SRC
 
+   #+BEGIN_SRC emacs-lisp
+     (use-package lsp-vue
+       :ensure t
+       :after lsp-javascript-typescript
+       :init
+       (defun ds/vue-or-not ()
+         (string-match "\\.vue$" (buffer-name)))
+       (defun ds/web-mode-lsp ()
+         (if (ds/vue-or-not)
+             (lsp-vue-enable)
+           (lsp-javascript-typescript-enable)))
+       :hook ((web-mode . ds/web-mode-lsp)))
+   #+END_SRC
+   
 * Applications
 
   Packages that are sort of "apps" on their own or interact with other
@@ -2140,7 +2152,8 @@
            (if laptop-display
                (if laptop-display-external
                    (ds/connect-laptop-external)
-                 (ds/disconnect-laptop-external)))))
+                 (ds/disconnect-laptop-external)))
+           (start-process "" nil (concat user-emacs-directory "exwm/bin/wallpaper"))))
 
        :config
        ;; (add-hook 'exwm-randr-screen-change-hook #'ds/powerline-set-height)
