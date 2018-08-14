@@ -850,9 +850,9 @@
        (setq eshell-scroll-to-bottom-on-input 'all
              eshell-error-if-no-glob t
              eshell-hist-ignoredups t
-             eshell-save-history-on-exit t
+             eshell-save-history-on-exit nil
              eshell-prefer-lisp-functions nil
-             eshell-history-size 2048
+             eshell-history-size 4096
              eshell-destroy-buffer-when-process-dies t)
 
        (defun ds/eshell-setup ()
@@ -870,11 +870,13 @@
 
        (defun ds/eshell-append-history ()
          "Call `eshell-write-history' with the `append' parameter set to `t'."
+    
          (when eshell-history-ring
            (let ((newest-cmd-ring (make-ring 1)))
              (ring-insert newest-cmd-ring (car (ring-elements eshell-history-ring)))
              (let ((eshell-history-ring newest-cmd-ring))
-               (eshell-write-history eshell-history-file-name t))))))
+               (eshell-write-history eshell-history-file-name t)
+               (eshell-read-history))))))
    #+END_SRC
 
    Autosuggest like my zsh setup
