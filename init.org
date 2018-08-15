@@ -359,6 +359,24 @@
             eslint-system)))
     #+END_SRC
 
+*** Window layouts
+
+    #+BEGIN_SRC emacs-lisp
+      (defun ds/wlayout-web-dev ()
+        (interactive)
+        (delete-other-windows)
+        (split-window-right (* (/ (window-width) 16) 9))
+        (other-window 1)
+        (split-window-below 50))
+
+      (defun ds/wlayout-logs ()
+        (interactive)
+        (delete-other-windows)
+        (split-window-below)
+        (other-window 1)
+        (split-window-right (* (/ (window-width) 4) 3)))
+    #+END_SRC
+    
 ** Macros
 *** Popup Window Width Setter
 
