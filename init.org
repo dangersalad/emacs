@@ -909,7 +909,6 @@
        :init
        (require 'subr-x)
        (defun ds/esh-autosuggest-setup ()
-         (message "ds/esh-autesuggest-setup")
          (set-variable 'company-require-match nil)
          (face-remap-add-relative 'company-preview-common 'ds/esh-autosuggest-face)))
    #+END_SRC
@@ -1073,6 +1072,29 @@
                           ""
                           (format-time-string "%H:%M" (current-time)) `(:foreground ,(ds/get-zenburn-color "green")))
 
+       (defun ds/extract-tramp-target (conn-type &optional part)
+         (save-match-data
+           (let ((dirname (eshell/pwd)))
+             (and (string-match (concat conn-type ":\\([^@|:]+\\)@?\\([^@|:]*\\)") dirname)
+                  (let ((user (match-string 1 dirname))
+                        (host (match-string 2 dirname)))
+                    (cond ((equal part 'user) user)
+                          ((equal part 'host) host)
+                          ((equal part 'all) (concat user "@" host))))))))
+
+       (ds/eshell-section esh-tramp-status
+                          ""
+                          (let ((ssh-status (ds/extract-tramp-target "ssh" 'all))
+                                (sudo-status (ds/extract-tramp-target "sudo" 'user)))
+                            (if (and ssh-status sudo-status)
+                                (concat (ds/with-face (concat "ssh:" ssh-status) `(:foreground ,(ds/get-zenburn-color "red+1")))
+                                        " "
+                                        (ds/with-face (concat "sudo:" sudo-status)  `(:foreground ,(ds/get-zenburn-color "yellow"))))
+                              (if ssh-status
+                                  (ds/with-face (concat "ssh:" ssh-status) `(:foreground ,(ds/get-zenburn-color "red+1")))
+                                (if sudo-status
+                                    (ds/with-face (concat "sudo:" sudo-status) `(:foreground ,(ds/get-zenburn-color "yellow"))))))))
+
        (if (boundp 'set-fontset-font)
            (progn (set-fontset-font t '(#Xf017 . #Xf017) "fontawesome")
                   (set-fontset-font t '(#Xf011 . #Xf011) "fontawesome")
@@ -1096,6 +1118,7 @@
                          it))
              acc)))
 
+
        (defun ds/eshell-prompt-func ()
          "Build `eshell-prompt-function'"
          (concat ds/eshell-header
@@ -1107,7 +1130,8 @@
          "Eshell prompt sections")
 
        ;; Choose which eshell-funcs to enable
-       (setq ds/eshell-funcs (list (list esh-dir esh-clock) (list esh-git) (list esh-last-command-status)))
+       (setq ds/eshell-funcs (list (list esh-dir esh-clock) (list esh-git) (list esh-tramp-status esh-last-command-status)))
+  
 
        ;; Enable the new eshell prompt
        (setq eshell-prompt-function 'ds/eshell-prompt-func))
