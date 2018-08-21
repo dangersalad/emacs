@@ -43,6 +43,7 @@
            package-pinned-packages
            '((use-package       . "melpa")
              (projectile        . "melpa")
+             (pomidor           . "melpa")
              (org-plus-contrib  . "org")
              (pdf-tools         . "melpa")
              (flycheck          . "melpa")
@@ -678,41 +679,45 @@
        :ensure t
        :init
        (defvar zenburn-colors-alist ds/zenburn-colors)
-       :config
-       (load-theme 'zenburn t))
-       ;; default face customizations
-       ;; region selection
-       (set-face-attribute 'region nil 
-                           :background (ds/get-zenburn-color "blue+3")
-                           :inverse-video t)
-       ;; flat mode and header lines
-       (set-face-attribute 'header-line nil
-                           :background (ds/get-zenburn-color "bg+1")
-                           :box nil)
-       (set-face-attribute 'mode-line nil
-                           :background (ds/get-zenburn-color "bg+1")
-                           :box nil)
-       (set-face-attribute 'mode-line-inactive nil
-                           :foreground (ds/get-zenburn-color "bg+3")
-                           :background (ds/get-zenburn-color "bg+1")
-                           :box nil)
-       (set-face-attribute 'fringe nil
-                           :background (ds/get-zenburn-color "bg+1"))
-       ;; italic comments
-       (set-face-attribute 'font-lock-comment-face nil
-                           :slant 'italic)
-       ;; eldoc function face
-       (set-face-attribute 'eldoc-highlight-function-argument nil
-                           :foreground (ds/get-zenburn-color "blue-1"))
-       ;; set the verticle border color
-       (set-face-attribute 'vertical-border nil
-                           :foreground (ds/get-zenburn-color "bg-1"))
+       (defun ds/setup-zenburn-faces ()
+         (interactive)
+         ;; default face customizations
+         ;; region selection
+         (set-face-attribute 'region nil 
+                             :background (ds/get-zenburn-color "blue+3")
+                             :inverse-video t)
+         ;; flat mode and header lines
+         (set-face-attribute 'header-line nil
+                             :background (ds/get-zenburn-color "bg+1")
+                             :box nil)
+         (set-face-attribute 'mode-line nil
+                             :background (ds/get-zenburn-color "bg+1")
+                             :box nil)
+         (set-face-attribute 'mode-line-inactive nil
+                             :foreground (ds/get-zenburn-color "bg+3")
+                             :background (ds/get-zenburn-color "bg+1")
+                             :box nil)
+         (set-face-attribute 'fringe nil
+                             :background (ds/get-zenburn-color "bg+1"))
+         ;; italic comments
+         (set-face-attribute 'font-lock-comment-face nil
+                             :slant 'italic)
+         ;; eldoc function face
+         (set-face-attribute 'eldoc-highlight-function-argument nil
+                             :foreground (ds/get-zenburn-color "blue-1"))
+         ;; set the verticle border color
+         (set-face-attribute 'vertical-border nil
+                             :foreground (ds/get-zenburn-color "bg-1"))
 
-       ;; auto suggest face for eshell
-       (make-face 'ds/esh-autosuggest-face)
-       (set-face-attribute 'ds/esh-autosuggest-face nil
-                           :foreground (ds/get-zenburn-color "fg-1")
-                           :background (ds/get-zenburn-color "bg"))
+         ;; auto suggest face for eshell
+         (make-face 'ds/esh-autosuggest-face)
+         (set-face-attribute 'ds/esh-autosuggest-face nil
+                             :foreground (ds/get-zenburn-color "fg-1")
+                             :background (ds/get-zenburn-color "bg"))
+         )
+       :config
+       (load-theme 'zenburn t)
+       (ds/setup-zenburn-faces))
    #+END_SRC
 
 ** Autorevert
@@ -1395,6 +1400,25 @@
               ("C-c e" . er/expand-region)))
    #+END_SRC
 
+** Pomidoro
+
+   #+BEGIN_SRC emacs-lisp
+     (use-package pomidor
+       :ensure t
+       :bind (("<f12>" . pomidor)
+              :map pomidor-mode-map
+              ("C-RET" . pomidor-stop)
+              ("C-SPC" . pomidor-break))
+       :config
+       (unbind-key "RET" pomidor-mode-map)
+       (unbind-key "SPC" pomidor-mode-map)
+       (progn
+         (set-face-attribute 'pomidor-break-face nil :foreground (ds/get-zenburn-color "yellow"))
+         (set-face-attribute 'pomidor-overwork-face nil :foreground (ds/get-zenburn-color "red"))
+         (set-face-attribute 'pomidor-skip-face nil :foreground (ds/get-zenburn-color "bg+2"))
+         (set-face-attribute 'pomidor-work-face nil :foreground (ds/get-zenburn-color "green"))))
+   #+END_SRC
+
 * Programming Packages
 ** LSP
 
@@ -2042,6 +2066,19 @@
     #+END_SRC
 
 
+
+    
+*** Pomidor
+
+    #+BEGIN_SRC emacs-lisp
+      (use-package exwm
+        :ensure t
+        :config
+        (ds/popup-thing ds/exwm-popup-pomidor "*pomidor*"
+                        (pomidor))
+        (ds/popup-thing-display-settings "*pomidor*" top -1 0.4)
+        (exwm-input-set-key (kbd "s-<f12>") #'ds/exwm-popup-pomidor))
+    #+END_SRC
 
 ** Volume Control
 
