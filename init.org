@@ -1236,12 +1236,14 @@
 
    #+BEGIN_SRC emacs-lisp
      (use-package projectile
-       :pin melpa
        :ensure t
        :init
        (defvar projectile-remember-window-configs t)
-       :hook (after-init . projectile-mode)
+       :hook (after-init . (lambda () (projectile-mode +1)))
        :config
+       (define-key projectile-mode-map (kbd "s-p") 'projectile-command-map)
+       (define-key projectile-mode-map (kbd "C-c C-p") 'projectile-command-map)
+       (setq projectile-completion-system 'ivy)
        (setq projectile-mode-line
              '(:eval
                (if (file-remote-p default-directory)
