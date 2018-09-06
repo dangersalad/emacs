@@ -9,6 +9,7 @@
         electric-pair-delete-pair
         kill-region
         org-self-insert-command
+        sh-assignment
         yaml-electric-backspace
         yaml-electric-dash-and-dot
         ))

@@ -41,13 +41,14 @@
              ("gnu"          . 10)
              ("melpa"        . 0))
            package-pinned-packages
-           '((use-package       . "melpa")
-             (projectile        . "melpa")
-             (pomidor           . "melpa")
-             (org-plus-contrib  . "org")
-             (pdf-tools         . "melpa")
-             (flycheck          . "melpa")
-             (exwm              . "melpa")))
+           '((use-package        . "melpa")
+             (projectile         . "melpa")
+             (counsel-projectile . "melpa")
+             (pomidor            . "melpa")
+             (org-plus-contrib   . "org")
+             (pdf-tools          . "melpa")
+             (flycheck           . "melpa")
+             (exwm               . "melpa")))
 
      (package-initialize)
 
@@ -725,7 +726,9 @@
    #+BEGIN_SRC emacs-lisp
      (use-package autorevert
        :diminish auto-revert-mode
-       :hook (after-init . global-auto-revert-mode))
+       :demand t
+       :config
+       (global-auto-revert-mode))
    #+END_SRC
 
 ** Highlight Parentheses
@@ -763,7 +766,9 @@
    #+BEGIN_SRC emacs-lisp
      (use-package subword
        :diminish subword-mode
-       :hook (after-init . global-subword-mode))
+       :demand t
+       :config
+       (global-subword-mode))
    #+END_SRC
 
 ** Winner
@@ -771,7 +776,9 @@
    #+BEGIN_SRC emacs-lisp
      (use-package winner
        :diminish winner-mode
-       :hook (after-init . winner-mode))
+       :demand t
+       :config
+       (winner-mode))
    #+END_SRC
 
 ** Adaptive Wrap
@@ -1239,9 +1246,7 @@
        :ensure t
        :init
        (defvar projectile-remember-window-configs t)
-       :hook (after-init . (lambda () (projectile-mode +1)))
        :config
-       (define-key projectile-mode-map (kbd "s-p") 'projectile-command-map)
        (define-key projectile-mode-map (kbd "C-c C-p") 'projectile-command-map)
        (setq projectile-completion-system 'ivy)
        (setq projectile-mode-line
@@ -1262,7 +1267,8 @@
         'go '("go.mod")
         :compile "vgo build"
         :test "vgo test"
-        :test-suffix "_test.go"))
+        :test-suffix "_test.go")
+       (projectile-mode +1))
    #+END_SRC
 
 ** Exec Path from Shell
@@ -1380,7 +1386,9 @@
    #+BEGIN_SRC emacs-lisp
      (use-package counsel-projectile
        :ensure t
-       :hook (after-init . counsel-projectile-mode))
+       :after projectile
+       :config
+       (counsel-projectile-mode))
    #+END_SRC
 
 ** Swiper
