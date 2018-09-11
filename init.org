@@ -1265,8 +1265,8 @@
 
        (projectile-register-project-type
         'go '("go.mod")
-        :compile "vgo build"
-        :test "vgo test"
+        :compile "go build"
+        :test "go test"
         :test-suffix "_test.go")
        (projectile-mode +1))
    #+END_SRC
@@ -1468,9 +1468,9 @@
   
        :custom ((flycheck-emacs-lisp-load-path 'inherit)
                 (flycheck-display-errors-delay 0.4)
-                (flycheck-go-build-executable "vgo")
-                (flycheck-go-vet-executable "vgo")
-                (flycheck-go-test-executable "vgo"))
+                (flycheck-go-build-executable "go")
+                (flycheck-go-vet-executable "go")
+                (flycheck-go-test-executable "go"))
   
        :config
        (setq-default flycheck-disabled-checkers
@@ -1508,7 +1508,7 @@
        :ensure t
        :mode ("\\go.mod\\'" . fundamental-mode)
        :hook (before-save . gofmt-before-save)
-       :custom (go-command "vgo"))
+       :custom (go-command "go"))
    #+END_SRC
 
    #+BEGIN_SRC emacs-lisp
